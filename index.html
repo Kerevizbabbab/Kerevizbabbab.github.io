@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+body { background:#222; color:white; font-family:sans-serif; text-align:center; }
+.board { display:grid; grid-template-columns:repeat(8,60px); width:480px; margin:auto; }
+.cell { width:60px; height:60px; display:flex; align-items:center; justify-content:center; font-size:36px; cursor:pointer; }
+.white { background:#eee; color:black; }
+.black { background:#555; }
+</style>
+</head>
+<body>
+
+
+<h2 id="info">Bağlanıyor...</h2>
+<div class="board" id="board"></div>
+
+
+<script>
+const ws = new WebSocket('ws://localhost:8080');
+let selected = null;
+let myColor = null;
+
+
+let board = [
+'♜♞♝♛♚♝♞♜',
+'♟♟♟♟♟♟♟♟',
+'........',
+'........',
+'........',
+'........',
+'♙♙♙♙♙♙♙♙',
+'♖♘♗♕♔♗♘♖'
+];
+
+
+function draw() {
+const b = document.getElementById('board');
+b.innerHTML='';
+board.forEach((row,y)=>{
+[...row].forEach((p,x)=>{
+const d=document.createElement('div');
+d.className='cell '+((x+y)%2?'black':'white');
+d.textContent=p==='.'?'':p;
+d.onclick=()=>click(x,y);
+b.appendChild(d);
+});
+});
+}
+
+
+function click(x,y){
+if(selected){
+const msg={type:'move',from:selected,to:{x,y}};
+ws.send(JSON.stringify(msg));
+selected=null;
+} else selected={x,y};
+}
+
+
+ws.onmessage=e=>{
+const msg=JSON.parse(e.data);
+if(msg.type==='init'){
+myColor=msg.color;
+document.getElementById('info').innerText='Sen '+myColor+'sın';
+draw();
+}
+if(msg.type==='move'){
+const p=board[msg.from.y][msg.from.x];
+board[msg.from.y]=board[msg.from.y].substring(0,msg.from.x)+'.'+board[msg.from.y].substring(msg.from.x+1);
+board[msg.to.y]=board[msg.to.y].substring(0,msg.to.x)+p+board[msg.to.y].substring(msg.to.x+1);
+draw();
+}
+};
+</script>
+</body>
+</html>
