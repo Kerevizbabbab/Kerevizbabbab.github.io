@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Multiplayer Satranç</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+body { font-family: Arial; }
+table { border-collapse: collapse; margin-top:10px; }
+td {
+  width: 60px; height: 60px;
+  text-align: center;
+  font-size: 36px;
+  cursor: pointer;
+}
+.white { background:#eee; }
+.black { background:#555; color:white; }
+button,input { margin:3px; }
+</style>
+</head>
+<body>
+
+<h3 id="status">Bağlanıyor…</h3>
+
+<button onclick="createRoom()">Oda Oluştur</button>
+<input id="joinCode" placeholder="Kodu gir">
+<button onclick="joinRoom()">Katıl</button>
+<button onclick="startGame()">Start</button>
+
+<table id="board"></table>
+
+<script>
+let peer = null;
+let conn = null;
+let isHost = false;
+let myColor = "";
+let turn = "white";
+let started = false;
+let selected = null;
+let board = [];
+
+const startBoard = () => ([
+ ["r","n","b","q","k","b","n","r"],
+ ["p","p","p","p","p","p","p","p"],
+ ["","","","","","","",""],
+ ["","","","","","","",""],
+ ["","","","","","","",""],
+ ["","","","","","","",""],
+ ["P","P","P","P","P","P","P","P"],
+ ["R","N","B","Q","K","B","N","R"]
+]);
+
+const pieces = {
+ r:"♜", n:"♞", b:"♝", q:"♛", k:"♚", p:"♟",
+ R:"♖", N:"♘", B:"♗", Q:"♕", K:"♔", P:"♙"
+};
+
+function createRoom() {
+  if (peer) return;
+
+  isHost = true;
+  myColor = "white";
+
+  peer = new Peer();
+
+  peer.on("open", id => {
+    status.innerText = "ODA KODU: " + id + " (Beyaz)";
+  });
+
+  peer.on("connection", c => {
+    conn = c;
+    status.innerText = "Oyuncu bağlandı (Siyah)";
+    setupConn();
+  });
+}
+
+function joinRoom() {
+  myColor = "black";
+  peer = new Peer();
+
+  peer.on("open", () => {
+    conn = peer.connect(joinCode.value.trim());
+    setupConn();
+  });
+}
+
+function setupConn() {
+  conn.on("open", () => {
+    status.innerText += " | Bağlandı";
+  });
+
+  conn.on("data", data => {
+    if (data.type === "start") {
+      board = data.board;
+      turn = data.turn;
+      started = true;
+      draw();
+    }
+    if (data.type === "state") {
+      board = data.board;
+      turn = data.turn;
+      draw();
+    }
+  });
+}
+
+function startGame() {
+  if (!isHost || !conn) return;
+  board = startBoard();
+  turn = "white";
+  started = true;
+  conn.send({ type:"start", board, turn });
+  draw();
+}
+
+function clickCell(x,y) {
+  if (!started || turn !== myColor) return;
+
+  if (!selected && board[y][x]) {
+    selected = {x,y};
+  } else if (selected) {
+    board[y][x] = board[selected.y][selected.x];
+    board[selected.y][selected.x] = "";
+    selected = null;
+    turn = turn === "white" ? "black" : "white";
+    conn.send({ type:"state", board, turn });
+    draw();
+  }
+}
+
+function draw() {
+  boardElem.innerHTML = "";
+  for (let y=0;y<8;y++) {
+    let r = boardElem.insertRow();
+    for (let x=0;x<8;x++) {
+      let c = r.insertCell();
+      c.className = (x+y)%2 ? "black":"white";
+      c.innerText = pieces[board[y][x]] || "";
+      c.onclick = () => clickCell(x,y);
+    }
+  }
+}
+
+const boardElem = document.getElementById("board");
+</script>
+
+</body>
+</html>
